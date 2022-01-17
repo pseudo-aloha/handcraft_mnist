@@ -1,7 +1,7 @@
 
 from definition import *
 from sc import *
-from Claissifier import *
+from SC_Classifier import *
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
