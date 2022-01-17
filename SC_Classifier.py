@@ -52,9 +52,9 @@ class DeepNeuralNetwork():
         output_layer=self.sizes[3]
 
         params = {
-            'W1':np.random.randn(hidden_1, input_layer) * np.sqrt(1. / hidden_1),
-            'W2':np.random.randn(hidden_2, hidden_1) * np.sqrt(1. / hidden_2),
-            'W3':np.random.randn(output_layer, hidden_2) * np.sqrt(1. / output_layer)
+            'W1':np.clip(np.random.randn(hidden_1, input_layer) * np.sqrt(1. / hidden_1), -1, 1),
+            'W2':np.clip(np.random.randn(hidden_2, hidden_1) * np.sqrt(1. / hidden_2), -1, 1),
+            'W3':np.clip(np.random.randn(output_layer, hidden_2) * np.sqrt(1. / output_layer), -1, 1)
         }
 
         return params
@@ -66,7 +66,7 @@ class DeepNeuralNetwork():
         params['A0'] = x_train
 
         # input layer to hidden layer 1
-        print("A0 shape = ", params['A0'].shape, "to sc ", to_sc(params["W1"]).shape)
+        # print("A0 shape = ", params['A0'].shape, "to sc ", to_sc(params["W1"]).shape)
         params['Z1'] = linear(to_sc(params["W1"]).type(torch.BoolTensor), params['A0'].type(torch.BoolTensor))
         # params['A1'] = self.sigmoid(params['Z1'])
 
@@ -80,7 +80,7 @@ class DeepNeuralNetwork():
 
         return params['A3']
 
-    def backward_pass(self, y_train, output):
+    def backward_pass(self, x_train, y_train, output):
         '''
             This is the backpropagation algorithm, for calculating the updates
             of the neural network's parameters.
@@ -94,18 +94,21 @@ class DeepNeuralNetwork():
         '''
         params = self.params
         change_w = {}
-        # print("y train = ", y_train, "output = ", output, "y - o = ", output - y_train)
+
         # Calculate W3 update
-        # print("o - y = ", output - y_train)
-        error = 2 * (output - y_train) / output.shape[0] * self.softmax(params['Z3'], derivative=True) + 2 * self.lam * np.sum(params["W3"])
-        # print("error = ", error)
+        # print("o - y = ", (output - y_train), output.shape, y_train.shape)
+        error = 2 * (output - np.squeeze(y_train)) / output.shape[0] * self.softmax(to_binary(params['Z3']), derivative=True) + 2 * self.lam * np.sum(params["W3"])
+        error = error.reshape(-1,1)
+        # print("error = ", error.shape)
         # change_w['W3'] = np.outer(error, params['A2'])
         # print("shape = ", self.beta_1[0].shape, self.m_t[0].shape, self.beta_1[0].shape, error.shape)
         self.m_t[0] = self.beta_1[0] * self.m_t[0] + (1 - self.beta_1[0]) * error
         self.v_t[0] = self.beta_2[0] * self.v_t[0] + (1 - self.beta_2[0]) * np.multiply(error, error)
+        # print("m_t = ", self.m_t[0].shape, "v_t = ", self.v_t[0].shape)
         m_cap = self.m_t[0] / (1 - (self.beta_1[0] ** self.t))
         v_cap = self.v_t[0] / (1 - (self.beta_2[0] ** self.t))
-        change_w['W3'] = np.outer(((m_cap)/(np.sqrt(v_cap)+self.epsilon)), params['A2'])#.reshape(-1, 1)
+        # print("mcap = ", m_cap.shape, "v_cap = ", v_cap.shape, ((m_cap)/(np.sqrt(v_cap)+self.epsilon)).shape, to_binary(params['Z2']).shape)
+        change_w['W3'] = np.outer(((m_cap)/(np.sqrt(v_cap)+self.epsilon)), to_binary(params['Z2']))#.reshape(-1, 1)
         # print("change w3 shape = ", change_w["W3"].shape)
 
         # Calculate W2 update
@@ -116,7 +119,8 @@ class DeepNeuralNetwork():
         self.v_t[1] = self.beta_2[1] * self.v_t[1] + (1 - self.beta_2[1]) * np.multiply(error, error)
         m_cap = self.m_t[1] / (1 - (self.beta_1[1] ** self.t))
         v_cap = self.v_t[1] / (1 - (self.beta_2[1] ** self.t))
-        change_w['W2'] = np.outer(((m_cap)/(np.sqrt(v_cap)+self.epsilon)), params['A1'])#.reshape(-1, 1)
+        # print("z1 shape = ", params['Z1'].shape)
+        change_w['W2'] = np.outer(((m_cap)/(np.sqrt(v_cap)+self.epsilon)), to_binary(params['Z1']))#.reshape(-1, 1)
         # print("change w2 shape = ", change_w["W2"].shape)
 
 
@@ -128,7 +132,7 @@ class DeepNeuralNetwork():
         self.v_t[2] = self.beta_2[2] * self.v_t[2] + (1 - self.beta_2[2]) * np.multiply(error, error)
         m_cap = self.m_t[2] / (1 - (self.beta_1[2] ** self.t))
         v_cap = self.v_t[2] / (1 - (self.beta_2[2] ** self.t))
-        change_w['W1'] = np.outer(((m_cap)/(np.sqrt(v_cap)+self.epsilon)), params['A0'])#.reshape(-1, 1)
+        change_w['W1'] = np.outer(((m_cap)/(np.sqrt(v_cap)+self.epsilon)), x_train)#.reshape(-1, 1)
         # print("change w1 shape = ", change_w["W1"].shape)
 
         return change_w
@@ -186,9 +190,12 @@ class DeepNeuralNetwork():
                 y = np.zeros((10,1))
                 y[y_[0]] = 1
                 # print("y_ = ", y_)
-                changes_to_w = self.backward_pass(y, output)
+                changes_to_w = self.backward_pass(x, y, output)
                 # print("changes to w shape = ", changes_to_w['W1'].shape, changes_to_w['W2'].shape, changes_to_w['W3'].shape)
                 self.update_network_parameters(changes_to_w)
+                np.clip(self.params["W1"], -1 ,1)
+                np.clip(self.params["W2"], -1 ,1)
+                np.clip(self.params["W3"], -1 ,1)
             
             accuracy = self.compute_accuracy(test_loader)
             print('Epoch: {0}, Time Spent: {1:.2f}s, Accuracy: {2:.2f}%'.format(

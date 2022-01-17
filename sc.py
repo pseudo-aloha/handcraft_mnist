@@ -4,6 +4,8 @@ import torch
 
 def bit_gen(number):
   prob = (number.item() + 1) / 2
+  prob = np.clip(prob, -1, 1)
+  assert(prob >= 0)
   return np.random.choice([bool(0), bool(1)], size=BITLEN, p=[1 - prob, prob])
 
 def binarize(tensor):
@@ -33,12 +35,12 @@ def xnor(tensor1, tensor2):
 
 def linear(tensors1, tensors2):
   tensors = np.zeros((tensors1.shape[0], BITLEN))
-  tmp_tensor = np.zeros((tensors2.shape[0], BITLEN));
+  tmp_tensor = np.zeros((tensors2.shape[0], BITLEN))
   for i in range(tensors1.shape[0]):
     for j in range(tensors2.shape[0]):
-      tmp_tensor[j] = xnor(tensors1[i][j], tensors2[j]);
-    tensors[i] = mux(tmp_tensor);
-  print(tensors.shape);
+      tmp_tensor[j] = xnor(tensors1[i][j], tensors2[j])
+    tensors[i] = mux(tmp_tensor)
+  # print(tensors.shape)
   return tensors
 
 
